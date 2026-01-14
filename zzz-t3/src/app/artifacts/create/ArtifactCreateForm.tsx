@@ -78,7 +78,7 @@ export default function ArtifactCreateForm() {
     onSuccess: () => {
       setNotification({
         type: "success",
-        message: "Artifact created successfully!",
+        message: "Drive Disc created successfully!",
       });
       setFormData(initialFormData);
       router.refresh();
