@@ -16,18 +16,7 @@ export function ArtifactRow({ artifact, onRefresh }: ArtifactRowProps) {
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isLevelingModalOpen, setIsLevelingModalOpen] = useState(false);
 
-  const hasLevelingData = artifact.leveling && (
-    (artifact.leveling.lHP ?? 0) +
-    (artifact.leveling.lATK ?? 0) +
-    (artifact.leveling.lDEF ?? 0) +
-    (artifact.leveling.lPercentHP ?? 0) +
-    (artifact.leveling.lPercentATK ?? 0) +
-    (artifact.leveling.lPercentDEF ?? 0) +
-    (artifact.leveling.lAP ?? 0) +
-    (artifact.leveling.lPEN ?? 0) +
-    (artifact.leveling.lCritRate ?? 0) +
-    (artifact.leveling.lCritDMG ?? 0) > 0
-  );
+  const hasLevelingData = artifact.leveling;
 
   const renderCheckbox = (value: number | null) => (
     <div className="flex justify-center">
