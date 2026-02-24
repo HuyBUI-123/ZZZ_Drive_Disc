@@ -49,7 +49,7 @@ export const artifactConfig = {
     "Marvelous",
     "Unknown",
   ],
-  sources: ["Routine Cleanup", "Music Store"],
+  sources: ["Routine Cleanup", "Music Store", "Music Store - Selected"],
   artifactSets: [
       "Astral Voice",
       "Branch & Blade Song",
