@@ -74,6 +74,8 @@ export const artifactConfig = {
       "Moonlight Lullaby",
       "Dawn's Bloom",
       "White Water Ballad",
-      "Shining Aria"
+      "Shining Aria",
+      "Bunny in Wonderland",
+      "Notes From the Chained"
     ],
 };
