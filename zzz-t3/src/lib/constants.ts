@@ -76,6 +76,8 @@ export const artifactConfig = {
       "White Water Ballad",
       "Shining Aria",
       "Bunny in Wonderland",
-      "Notes From the Chained"
+      "Notes From the Chained",
+      "Wuthering Salon",
+      "The Sky Ablaze"
     ],
 };
