@@ -29,6 +29,7 @@ export const artifactConfig = {
         { value: "Ether", label: "Ether" },
         { value: "Fire", label: "Fire" },
         { value: "Ice", label: "Ice" },
+        { value: "Wind", label: "Wind" },
     ],
     6: [
         { value: "%HP", label: "%HP" },
