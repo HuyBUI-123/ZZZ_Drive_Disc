@@ -268,6 +268,115 @@ export const getUniqueMainStats = (levelingData: LevelingDataItem[], selectedTyp
     .filter((value, index, self) => value && self.indexOf(value) === index) as string[];
 };
 
+export interface ArtifactRollDataItem {
+  hp: number | null;
+  atk: number | null;
+  def: number | null;
+  percentHP: number | null;
+  percentATK: number | null;
+  percentDEF: number | null;
+  pen: number | null;
+  ap: number | null;
+  critRate: number | null;
+  critDMG: number | null;
+  lHP: number | null;
+  lATK: number | null;
+  lDEF: number | null;
+  lPercentHP: number | null;
+  lPercentATK: number | null;
+  lPercentDEF: number | null;
+  lPEN: number | null;
+  lAP: number | null;
+  lCritRate: number | null;
+  lCritDMG: number | null;
+}
+
+const SUBSTAT_TO_PRESENCE_KEY: Record<string, keyof ArtifactRollDataItem> = {
+  'HP': 'hp',
+  'ATK': 'atk',
+  'DEF': 'def',
+  '%HP': 'percentHP',
+  '%ATK': 'percentATK',
+  '%DEF': 'percentDEF',
+  'PEN': 'pen',
+  'AP': 'ap',
+  'Crit Rate': 'critRate',
+  'Crit DMG': 'critDMG',
+};
+
+const SUBSTAT_TO_ROLL_KEY: Record<string, keyof ArtifactRollDataItem> = {
+  'HP': 'lHP',
+  'ATK': 'lATK',
+  'DEF': 'lDEF',
+  '%HP': 'lPercentHP',
+  '%ATK': 'lPercentATK',
+  '%DEF': 'lPercentDEF',
+  'PEN': 'lPEN',
+  'AP': 'lAP',
+  'Crit Rate': 'lCritRate',
+  'Crit DMG': 'lCritDMG',
+};
+
+export interface RollDistributionBucket {
+  rolls: number;
+  count: number;
+  percentage: number;
+}
+
+export interface RollDistributionResult {
+  distribution: RollDistributionBucket[];
+  appearancePercentage: number;
+  totalArtifacts: number;
+  hasAllSubstatsCount: number;
+}
+
+export const calculateRollDistribution = (
+  artifactData: ArtifactRollDataItem[],
+  selectedSubstats: string[],
+): RollDistributionResult => {
+  const empty: RollDistributionResult = {
+    distribution: [0, 1, 2, 3, 4, 5].map(rolls => ({ rolls, count: 0, percentage: 0 })),
+    appearancePercentage: 0,
+    totalArtifacts: artifactData.length,
+    hasAllSubstatsCount: 0,
+  };
+
+  if (!selectedSubstats.length || !artifactData.length) return empty;
+
+  const buckets: Record<number, number> = { 0: 0, 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
+  let hasAllSubstatsCount = 0;
+  const total = artifactData.length;
+
+  for (const artifact of artifactData) {
+    const allPresent = selectedSubstats.every(sub => {
+      const key = SUBSTAT_TO_PRESENCE_KEY[sub];
+      return key !== undefined && (artifact[key] ?? 0) === 1;
+    });
+    if (allPresent) hasAllSubstatsCount++;
+
+    const totalRolls = selectedSubstats.reduce((sum, sub) => {
+      const key = SUBSTAT_TO_ROLL_KEY[sub];
+      return sum + (key !== undefined ? (artifact[key] ?? 0) : 0);
+    }, 0);
+
+    if (totalRolls >= 0 && totalRolls <= 5) {
+      buckets[totalRolls] = (buckets[totalRolls] ?? 0) + 1;
+    }
+  }
+
+  return {
+    distribution: [0, 1, 2, 3, 4, 5].map(rolls => ({
+      rolls,
+      count: buckets[rolls] ?? 0,
+      percentage: total > 0 ? ((buckets[rolls] ?? 0) / total) * 100 : 0,
+    })),
+    appearancePercentage: total > 0 ? (hasAllSubstatsCount / total) * 100 : 0,
+    totalArtifacts: total,
+    hasAllSubstatsCount,
+  };
+};
+
+
 // Re-export existing functions if needed, or just rely on these new ones.
 // The existing functions were for Substats section. I should probably keep them or adapt them.
 // For now, I'll add the Substat functions back in to avoid breaking the Substat section.
