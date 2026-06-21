@@ -287,7 +287,7 @@ export const RollDistributionSection: React.FC<RollDistributionSectionProps> = (
               <div className="mb-4 text-center">
                 <h2 className="text-xl font-bold text-white">Distribution Counts</h2>
                 <p className="text-xs text-gray-400 mt-1">
-                  Total leveled artifacts: {result.totalArtifacts}
+                  Drive Discs with chosen substats: {result.hasAllSubstatsCount} / {result.totalArtifacts} total
                 </p>
               </div>
               <div className="flex-1">

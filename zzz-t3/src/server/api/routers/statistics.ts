@@ -238,6 +238,7 @@ export const statisticsRouter = createTRPCRouter({
           lPEN: artifactLeveling.lPEN,
           lCritRate: artifactLeveling.lCritRate,
           lCritDMG: artifactLeveling.lCritDMG,
+          addedSubstat: artifactLeveling.addedSubstat,
         })
         .from(artifactLeveling)
         .innerJoin(artifactItself, eq(artifactLeveling.id, artifactItself.id))
