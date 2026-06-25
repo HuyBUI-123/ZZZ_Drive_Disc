@@ -46,6 +46,12 @@ export function NavBarClient({ session }: NavBarClientProps) {
                   Add Drive Disc
                 </Link>
                 <Link
+                  href="/artifacts/upload"
+                  className="rounded-lg bg-yellow-600 px-4 py-2 font-semibold text-white shadow-md transition-all hover:bg-yellow-500 hover:shadow-yellow-500/20 active:scale-95"
+                >
+                  Upload JSON
+                </Link>
+                <Link
                   href="/leveling/search"
                   className="rounded-lg bg-yellow-600 px-4 py-2 font-semibold text-white shadow-md transition-all hover:bg-yellow-500 hover:shadow-yellow-500/20 active:scale-95"
                 >
@@ -177,6 +183,13 @@ export function NavBarClient({ session }: NavBarClientProps) {
                   className="w-full rounded-lg bg-yellow-600 px-4 py-3 font-semibold text-white shadow-md transition-all hover:bg-yellow-500 active:scale-95 text-center"
                 >
                   Add Artifact
+                </Link>
+                <Link
+                  href="/artifacts/upload"
+                  onClick={toggleMobileMenu}
+                  className="w-full rounded-lg bg-yellow-600 px-4 py-3 font-semibold text-white shadow-md transition-all hover:bg-yellow-500 active:scale-95 text-center"
+                >
+                  Upload JSON
                 </Link>
                 <Link
                   href="/leveling/search"
