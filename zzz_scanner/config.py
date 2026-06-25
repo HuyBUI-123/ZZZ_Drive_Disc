@@ -120,19 +120,22 @@ RC_DISMISS_POINT = (1280, 1300)
 
 # Each S disc is found by its gold rarity bar; click this far ABOVE the bar's
 # center to land on the disc thumbnail itself.
-RC_CARD_CLICK_Y_OFFSET = -90
+RC_CARD_CLICK_Y_OFFSET = -65
 
-# HSV range (OpenCV: H 0-179) for the gold/orange S-rarity bar.
-RC_BAR_HSV_LOWER = (12, 110, 140)
-RC_BAR_HSV_UPPER = (30, 255, 255)
+# HSV range (OpenCV: H 0-179) for the S-rarity bar. The bar is a flat pure
+# gold — RGB (255,181,0) == HSV (21,255,255) — so we keep a tight band around
+# it. This isolates the bar from the duller gold of disc artwork, which would
+# otherwise merge into one oversized blob.
+RC_BAR_HSV_LOWER = (17, 180, 180)
+RC_BAR_HSV_UPPER = (25, 255, 255)
 
-# Size/shape filtering for the detected rarity bars (px at 2560x1440).
-# The bar is a wide, short horizontal strip.
-RC_BAR_MIN_WIDTH = 80
-RC_BAR_MAX_WIDTH = 260
+# Size filtering for the detected gold bars (px at 2560x1440).
+RC_BAR_MIN_WIDTH = 80    # real bars ~125px; A-rank artwork blobs ~61px
+RC_BAR_MAX_WIDTH = 300
 RC_BAR_MIN_HEIGHT = 6
-RC_BAR_MAX_HEIGHT = 40
-RC_ROW_TOLERANCE = 50   # px: bars within this Y range count as the same row
+RC_BAR_MAX_HEIGHT = 90
+RC_BAR_MIN_ASPECT = 1.6  # bar w/h is high; square artwork blobs ~1.1
+RC_ROW_TOLERANCE = 60    # px: bars within this Y range count as the same row
 
 
 # ===========================================================================

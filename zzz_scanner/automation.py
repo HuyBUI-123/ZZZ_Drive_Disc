@@ -1,10 +1,16 @@
 """
-Click automation: drives the mouse through the detected thumbnails,
-OCRs each detail popup, and returns the parsed artifacts.
+Click automation: drives the mouse through the discs and OCRs each detail view,
+branching on the situation (source) the user picked.
 
-Flow per artifact (popup overlaps center thumbnails, so we must dismiss
-between each one before the next click lands on a thumbnail):
-    click thumbnail -> wait -> capture+OCR popup -> dismiss popup -> next
+  Routine Cleanup:
+    Detect the S-rarity discs (gold bars), then for each one
+        click disc -> wait -> capture+OCR popup -> dismiss popup -> next
+    (the popup overlaps the grid, so it must be dismissed between clicks).
+
+  Music Store:
+    A fixed 2x5 grid of 10 discs with a persistent left detail panel, so
+        click disc -> wait -> capture+OCR left panel -> next
+    (no popup to dismiss).
 """
 import time
 import mss
@@ -12,8 +18,8 @@ import pyautogui
 from PIL import Image
 
 import config
-from detector import detect_thumbnails
-from ocr import extract_from_image, capture_popup
+from detector import detect_s_discs
+from ocr import extract_from_image, capture_detail
 
 # Move mouse to a screen corner to abort the whole run at any time.
 pyautogui.FAILSAFE = True
@@ -27,55 +33,77 @@ def capture_full_screen() -> Image.Image:
         return Image.frombytes("RGB", shot.size, shot.bgra, "raw", "BGRX")
 
 
+def _click(x: int, y: int) -> None:
+    pyautogui.moveTo(x, y, duration=config.MOUSE_MOVE_DURATION)
+    pyautogui.click()
+
+
 def _dismiss_popup() -> None:
-    x, y = config.POPUP_DISMISS_POINT
+    x, y = config.RC_DISMISS_POINT
     pyautogui.moveTo(x, y, duration=config.MOUSE_MOVE_DURATION)
     pyautogui.click()
     time.sleep(config.DISMISS_WAIT)
 
 
-def scan_all(progress_cb=None) -> list[dict]:
-    """
-    Detect every 5-star thumbnail, click through each, OCR its popup.
+def _read_one(situation: str, x: int, y: int, index: int) -> dict:
+    """Click a disc, OCR its detail view, return the parsed dict."""
+    _click(x, y)
+    time.sleep(config.CLICK_WAIT)
 
-    progress_cb(done, total, data) is called after each artifact, if given.
-    Returns a list of parsed-artifact dicts (with debug fields).
-    """
+    detail_img = capture_detail(situation)
+    data, raw = extract_from_image(detail_img)
+    data["_index"] = index
+    data["_click"] = (x, y)
+    data["_image"] = detail_img  # kept in memory for the rating UI; not exported
+    return data
+
+
+def _scan_routine_cleanup(progress_cb=None) -> list[dict]:
     screen = capture_full_screen()
-    thumbs = detect_thumbnails(screen)
+    discs = detect_s_discs(screen)
 
     results: list[dict] = []
-    total = len(thumbs)
-
-    for i, t in enumerate(thumbs):
-        # Click the thumbnail
-        pyautogui.moveTo(t["x"], t["y"], duration=config.MOUSE_MOVE_DURATION)
-        pyautogui.click()
-        time.sleep(config.POPUP_WAIT)
-
-        # Read the popup
-        popup_img = capture_popup()
-        data, raw = extract_from_image(popup_img)
-        data["_index"] = i
-        data["_click"] = (t["x"], t["y"])
-        data["_image"] = popup_img  # kept in memory for the rating UI; not exported
+    total = len(discs)
+    for i, d in enumerate(discs):
+        data = _read_one("routine_cleanup", d["x"], d["y"], i)
         results.append(data)
-
         if progress_cb:
             progress_cb(i + 1, total, data)
-
-        # Dismiss so the next thumbnail isn't hidden behind the popup
-        _dismiss_popup()
-
+        _dismiss_popup()  # uncover the grid for the next click
     return results
 
 
-def scan_single_at(x: int, y: int) -> tuple[dict, str]:
-    """Click one given point, OCR its popup, dismiss. For debugging timing."""
-    pyautogui.moveTo(x, y, duration=config.MOUSE_MOVE_DURATION)
-    pyautogui.click()
-    time.sleep(config.POPUP_WAIT)
-    popup_img = capture_popup()
-    data, raw = extract_from_image(popup_img)
-    _dismiss_popup()
+def _scan_music_store(progress_cb=None) -> list[dict]:
+    points = config.MS_GRID_POINTS
+    results: list[dict] = []
+    total = len(points)
+    for i, (x, y) in enumerate(points):
+        data = _read_one("music_store", x, y, i)
+        results.append(data)
+        if progress_cb:
+            progress_cb(i + 1, total, data)
+    return results
+
+
+def scan_all(source: str, progress_cb=None) -> list[dict]:
+    """
+    Scan every disc for the given source.
+
+    progress_cb(done, total, data) is called after each disc, if given.
+    Returns a list of parsed-disc dicts (with debug fields).
+    """
+    situation = config.get_situation(source)
+    if situation == "music_store":
+        return _scan_music_store(progress_cb)
+    return _scan_routine_cleanup(progress_cb)
+
+
+def scan_single_at(situation: str, x: int, y: int) -> tuple[dict, str]:
+    """Click one given point, OCR its detail view. For debugging timing."""
+    _click(x, y)
+    time.sleep(config.CLICK_WAIT)
+    detail_img = capture_detail(situation)
+    data, raw = extract_from_image(detail_img)
+    if situation != "music_store":
+        _dismiss_popup()
     return data, raw

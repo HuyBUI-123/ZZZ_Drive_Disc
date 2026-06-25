@@ -13,7 +13,7 @@ import numpy as np
 from PIL import Image, ImageDraw
 
 import config
-from detector import detect_s_discs, _crop_to_region
+from detector import detect_s_discs, debug_candidates, _crop_to_region
 
 
 def main():
@@ -46,6 +46,16 @@ def main():
         draw.rectangle([x, y, x + w, y + h], outline=(0, 255, 0), width=3)
         draw.ellipse([t["x"] - 6, t["y"] - 6, t["x"] + 6, t["y"] + 6], fill=(255, 0, 0))
         draw.text((x + 4, y - 16), str(i), fill=(255, 255, 0))
+
+    if "--debug" in args:
+        print("ALL gold blobs found in the region (before/with filtering):")
+        cands = debug_candidates(img)
+        if not cands:
+            print("  (none — HSV matched nothing in the region; check mask/region)")
+        for c in cands:
+            status = "KEEP" if c["passed"] else "drop(" + ",".join(c["rejected_by"]) + ")"
+            print(f"  box={c['box']}  w={c['w']} h={c['h']} aspect={c['aspect']}  -> {status}")
+        print()
 
     img.save(out_path)
     print(f"Detected {len(discs)} S-rarity disc(s).")

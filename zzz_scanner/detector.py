@@ -67,8 +67,8 @@ def detect_s_discs(img: Image.Image) -> list[dict]:
             continue
         if not (config.RC_BAR_MIN_HEIGHT <= h <= config.RC_BAR_MAX_HEIGHT):
             continue
-        # The bar is wider than it is tall — reject anything roughly square.
-        if w < h * 2:
+        # The rarity bar is a wide strip; reject squarish artwork blobs.
+        if w < h * config.RC_BAR_MIN_ASPECT:
             continue
         bar_cx = off_x + x + w // 2
         bar_cy = off_y + y + h // 2
@@ -79,6 +79,45 @@ def detect_s_discs(img: Image.Image) -> list[dict]:
         })
 
     return _sort_reading_order(found)
+
+
+def debug_candidates(img: Image.Image) -> list[dict]:
+    """
+    Return EVERY gold blob found in the region (before filtering), each with
+    its dimensions and whether it passed each filter. For tuning only.
+    """
+    arr = np.array(img.convert("RGB"))
+    arr_bgr = cv2.cvtColor(arr, cv2.COLOR_RGB2BGR)
+    region = _crop_to_region(arr_bgr)
+    off_x, off_y = _search_offset()
+
+    hsv = cv2.cvtColor(region, cv2.COLOR_BGR2HSV)
+    mask = cv2.inRange(
+        hsv, np.array(config.RC_BAR_HSV_LOWER), np.array(config.RC_BAR_HSV_UPPER)
+    )
+    kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (15, 3))
+    mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel, iterations=2)
+    contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+
+    out = []
+    for c in contours:
+        x, y, w, h = cv2.boundingRect(c)
+        aspect = round(w / h, 2) if h else 0
+        reasons = []
+        if not (config.RC_BAR_MIN_WIDTH <= w <= config.RC_BAR_MAX_WIDTH):
+            reasons.append("width")
+        if not (config.RC_BAR_MIN_HEIGHT <= h <= config.RC_BAR_MAX_HEIGHT):
+            reasons.append("height")
+        if h and w < h * config.RC_BAR_MIN_ASPECT:
+            reasons.append("aspect")
+        out.append({
+            "box": (off_x + x, off_y + y, w, h),
+            "w": w, "h": h, "aspect": aspect,
+            "passed": not reasons,
+            "rejected_by": reasons,
+        })
+    out.sort(key=lambda d: (d["box"][1], d["box"][0]))
+    return out
 
 
 def _sort_reading_order(items: list[dict]) -> list[dict]:
