@@ -1,12 +1,15 @@
 """
-Genshin Artifact Scanner — main app.
+ZZZ Drive Disc Scanner — main app.
 
 Flow:
-  1. Start screen: click "Start Scan", switch to Genshin during countdown.
-  2. App minimizes, clicks through every 5-star thumbnail, OCRs each popup.
-  3. Rating screen: for each artifact, shows the popup crop + parsed fields,
+  1. Start screen: pick the source (Routine Cleanup / Music Store / Music Store
+     - Selected), the save path, then click "Start Scan" and switch to ZZZ
+     during the countdown.
+  2. App minimizes, clicks through each S-rarity disc, OCRs each detail view.
+  3. Rating screen: for each disc, shows the captured crop + parsed fields,
      you pick a score. Scores are the only manual input.
-  4. Export: writes artifacts_export.json (matches the web app's create schema).
+  4. Export: writes drive_discs_export.json (matches the web app's create
+     schema: set, type, mainStat, numberOfSubstats, substats, score, source).
 
 Run from an ADMINISTRATOR terminal.
 """
@@ -28,8 +31,8 @@ FIELD_FONT = ("Segoe UI", 15)
 class ScannerApp(ctk.CTk):
     def __init__(self):
         super().__init__()
-        self.title("Genshin Artifact Scanner")
-        self.geometry("960x720")
+        self.title("ZZZ Drive Disc Scanner")
+        self.geometry("980x740")
 
         self.results: list[dict] = []
         self.scores: dict[int, str] = {}
@@ -48,12 +51,13 @@ class ScannerApp(ctk.CTk):
     def _build_start_screen(self):
         self._clear()
         ctk.CTkLabel(
-            self.container, text="Genshin Artifact Scanner",
+            self.container, text="ZZZ Drive Disc Scanner",
             font=("Segoe UI", 26, "bold"),
         ).pack(pady=(40, 8))
         ctk.CTkLabel(
             self.container,
-            text="Open Genshin to the \"Obtained\" screen.\n"
+            text="Open ZZZ to the Challenge Results (Routine Cleanup) or the\n"
+                 "Music Store Tuning Results screen, matching the source below.\n"
                  "Click Start, then switch to the game before the countdown ends.",
             font=FIELD_FONT, justify="center",
         ).pack(pady=8)
@@ -102,7 +106,7 @@ class ScannerApp(ctk.CTk):
     def _countdown(self, remaining):
         if remaining > 0:
             self.status_label.configure(
-                text=f"Switch to Genshin! Scanning in {remaining}..."
+                text=f"Switch to ZZZ! Scanning in {remaining}..."
             )
             self.after(1000, lambda: self._countdown(remaining - 1))
         else:
@@ -112,7 +116,7 @@ class ScannerApp(ctk.CTk):
 
     def _run_scan(self):
         try:
-            results = scan_all()
+            results = scan_all(self.source)
         except Exception as e:  # noqa: BLE001 — surface any failure to the UI
             self.after(0, lambda: self._scan_failed(str(e)))
             return
@@ -131,7 +135,7 @@ class ScannerApp(ctk.CTk):
         self.idx = 0
         if not results:
             self.scan_btn.configure(state="normal")
-            self.status_label.configure(text="No artifacts detected. Try again.")
+            self.status_label.configure(text="No discs detected. Try again.")
             return
         self._build_rating_screen()
         self._show_current()
@@ -146,7 +150,7 @@ class ScannerApp(ctk.CTk):
         body = ctk.CTkFrame(self.container, fg_color="transparent")
         body.pack(fill="both", expand=True)
 
-        # Left: popup crop image
+        # Left: captured detail crop
         self.image_label = ctk.CTkLabel(body, text="")
         self.image_label.pack(side="left", padx=(0, 16))
 
@@ -207,9 +211,9 @@ class ScannerApp(ctk.CTk):
     def _show_current(self):
         data = self.results[self.idx]
         n = len(self.results)
-        self.header.configure(text=f"Artifact {self.idx + 1} of {n}")
+        self.header.configure(text=f"Drive Disc {self.idx + 1} of {n}")
 
-        # Image (scale popup crop to fit height ~440)
+        # Image (scale crop to fit height ~440)
         img = data.get("_image")
         if isinstance(img, Image.Image):
             target_h = 440
@@ -227,14 +231,12 @@ class ScannerApp(ctk.CTk):
             return f"{value if value not in (None, '') else '—'}{flag}"
 
         subs = ", ".join(data.get("substats") or []) or "—"
-        un = data.get("unactivatedSubstat") or "—"
         text = (
             f"Set:            {mark('set', data.get('set'))}\n\n"
-            f"Type:           {mark('type', data.get('type'))}\n\n"
+            f"Slot:           {mark('type', data.get('type'))}\n\n"
             f"Main stat:      {mark('mainStat', data.get('mainStat'))}\n\n"
-            f"# Substats:     {data.get('numberOfSubstats')}\n\n"
+            f"# Substats:     {mark('substats', data.get('numberOfSubstats'))}\n\n"
             f"Substats:       {mark('substats', subs)}\n\n"
-            f"Unactivated:    {un}\n\n"
             f"Source:         {self.source}"
         )
         self.fields_label.configure(text=text)
@@ -251,7 +253,7 @@ class ScannerApp(ctk.CTk):
 
     def _set_score(self, value):
         self.scores[self.idx] = value
-        # advance to next unscored, else just next
+        # advance to next
         if self.idx < len(self.results) - 1:
             self.idx += 1
         self._show_current()
@@ -277,7 +279,6 @@ class ScannerApp(ctk.CTk):
                 "mainStat": r.get("mainStat"),
                 "numberOfSubstats": r.get("numberOfSubstats"),
                 "substats": r.get("substats") or [],
-                "unactivatedSubstat": r.get("unactivatedSubstat"),
                 "score": self.scores.get(i, "Unknown"),
                 "source": self.source,  # chosen on the start page
             })
@@ -292,16 +293,16 @@ class ScannerApp(ctk.CTk):
         unscored = len(self.results) - len(self.scores)
         note = f" ({unscored} left as 'Unknown')" if unscored else ""
         self.export_status.configure(
-            text=f"Saved {len(out)} artifact(s) → {path}{note}"
+            text=f"Saved {len(out)} disc(s) → {path}{note}"
         )
 
     def _browse_path(self):
         from tkinter import filedialog
         chosen = filedialog.asksaveasfilename(
-            title="Save artifacts JSON",
+            title="Save drive discs JSON",
             defaultextension=".json",
             filetypes=[("JSON files", "*.json"), ("All files", "*.*")],
-            initialfile="artifacts_export.json",
+            initialfile="drive_discs_export.json",
         )
         if chosen:
             self.path_var.set(chosen)

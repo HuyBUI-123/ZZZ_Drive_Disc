@@ -116,7 +116,7 @@ RC_POPUP_REGION = {
 }
 
 # A safe empty spot to click to dismiss the open detail popup.
-RC_DISMISS_POINT = (1280, 1300)
+RC_DISMISS_POINT = (2300, 720)
 
 # Each S disc is found by its gold rarity bar; click this far ABOVE the bar's
 # center to land on the disc thumbnail itself.
