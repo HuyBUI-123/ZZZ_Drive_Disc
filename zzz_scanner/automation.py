@@ -55,6 +55,13 @@ def _read_one(situation: str, x: int, y: int, index: int) -> dict:
     data["_index"] = index
     data["_click"] = (x, y)
     data["_image"] = detail_img  # kept in memory for the rating UI; not exported
+
+    print(f"\n----- Disc #{index + 1}  (click {x},{y}) -----")
+    print("[RAW OCR]")
+    print(raw)
+    parsed = {k: v for k, v in data.items() if not k.startswith("_")}
+    print("[PARSED]", parsed)
+
     return data
 
 
