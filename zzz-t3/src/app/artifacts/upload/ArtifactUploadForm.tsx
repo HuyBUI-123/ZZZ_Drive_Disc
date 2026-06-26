@@ -70,6 +70,7 @@ export default function ArtifactUploadForm() {
   const [entries, setEntries] = useState<ValidatedEntry[]>([]);
   const [parseError, setParseError] = useState<string | null>(null);
   const [dragActive, setDragActive] = useState(false);
+  const [pastedText, setPastedText] = useState("");
   const [notification, setNotification] = useState<{
     type: "success" | "error";
     message: string;
@@ -90,26 +91,38 @@ export default function ArtifactUploadForm() {
     },
   });
 
-  const handleFile = async (file: File) => {
+  const parseJsonText = (text: string, source: string) => {
     setNotification(null);
     setParseError(null);
     setEntries([]);
-    setFileName(file.name);
+    setFileName(source);
 
     let json: unknown;
     try {
-      json = JSON.parse(await file.text());
+      json = JSON.parse(text);
     } catch {
-      setParseError("File is not valid JSON.");
+      setParseError("Not valid JSON.");
       return;
     }
 
     if (!Array.isArray(json)) {
-      setParseError("Expected a JSON array of artifacts.");
+      setParseError("Expected a JSON array of drive discs.");
       return;
     }
 
     setEntries(json.map((item, i) => validateEntry(item, i)));
+  };
+
+  const handleFile = async (file: File) => {
+    parseJsonText(await file.text(), file.name);
+  };
+
+  const handleLoadPasted = () => {
+    if (!pastedText.trim()) {
+      setParseError("Paste some JSON first.");
+      return;
+    }
+    parseJsonText(pastedText, "pasted JSON");
   };
 
   const handleDrop = (e: React.DragEvent) => {
@@ -182,6 +195,30 @@ export default function ArtifactUploadForm() {
           }}
         />
       </label>
+
+      {/* Paste box (alternative to a file) */}
+      <div className="mb-6">
+        <div className="mb-2 flex items-center gap-3">
+          <span className="text-sm text-gray-300">…or paste JSON</span>
+          <span className="text-xs text-gray-500">
+            (use the scanner&apos;s &quot;Copy JSON&quot; button)
+          </span>
+        </div>
+        <textarea
+          value={pastedText}
+          onChange={(e) => setPastedText(e.target.value)}
+          placeholder='[ { "set": "...", "type": "...", ... } ]'
+          rows={5}
+          className="w-full rounded-md border border-gray-600 bg-slate-800 px-3 py-2 font-mono text-sm text-white focus:border-purple-500 focus:outline-none focus:ring-1 focus:ring-purple-500"
+        />
+        <button
+          type="button"
+          onClick={handleLoadPasted}
+          className="mt-2 rounded-md bg-slate-700 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-slate-600"
+        >
+          Load pasted JSON
+        </button>
+      </div>
 
       {parseError && (
         <p className="mb-4 rounded-md border border-red-500/50 bg-red-500/20 px-4 py-3 text-red-200">

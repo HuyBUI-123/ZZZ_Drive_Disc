@@ -197,9 +197,13 @@ class ScannerApp(ctk.CTk):
         self.progress_label.pack(side="left", padx=12)
         ctk.CTkButton(nav, text="Next >", width=90, command=self._next).pack(side="left", padx=6)
         ctk.CTkButton(
+            nav, text="Copy JSON", width=120, fg_color="#2a6f8c",
+            hover_color="#225a71", command=self._copy_json,
+        ).pack(side="left", padx=(24, 6))
+        ctk.CTkButton(
             nav, text="Export JSON", width=130, fg_color="#2a8c4a",
             hover_color="#22713c", command=self._export,
-        ).pack(side="left", padx=(24, 6))
+        ).pack(side="left", padx=6)
         ctk.CTkButton(
             nav, text="New Scan", width=110, fg_color="#7a4ea0",
             hover_color="#633f85", command=self._restart,
@@ -268,9 +272,8 @@ class ScannerApp(ctk.CTk):
             self.idx += 1
             self._show_current()
 
-    def _export(self):
-        path = self.path_var.get().strip() or config.EXPORT_FILE
-
+    def _build_payload(self) -> list[dict]:
+        """The disc list in the web app's create-schema shape."""
         out = []
         for i, r in enumerate(self.results):
             out.append({
@@ -282,6 +285,15 @@ class ScannerApp(ctk.CTk):
                 "score": self.scores.get(i, "Unknown"),
                 "source": self.source,  # chosen on the start page
             })
+        return out
+
+    def _unscored_note(self) -> str:
+        unscored = len(self.results) - len(self.scores)
+        return f" ({unscored} left as 'Unknown')" if unscored else ""
+
+    def _export(self):
+        path = self.path_var.get().strip() or config.EXPORT_FILE
+        out = self._build_payload()
         try:
             with open(path, "w", encoding="utf-8") as f:
                 json.dump(out, f, indent=2, ensure_ascii=False)
@@ -290,10 +302,18 @@ class ScannerApp(ctk.CTk):
             return
 
         config.set_export_path(path)  # remember for next time
-        unscored = len(self.results) - len(self.scores)
-        note = f" ({unscored} left as 'Unknown')" if unscored else ""
         self.export_status.configure(
-            text=f"Saved {len(out)} disc(s) → {path}{note}"
+            text=f"Saved {len(out)} disc(s) → {path}{self._unscored_note()}"
+        )
+
+    def _copy_json(self):
+        out = self._build_payload()
+        text = json.dumps(out, indent=2, ensure_ascii=False)
+        self.clipboard_clear()
+        self.clipboard_append(text)
+        self.update()  # keep clipboard populated after the window loses focus
+        self.export_status.configure(
+            text=f"Copied {len(out)} disc(s) to clipboard{self._unscored_note()}"
         )
 
     def _browse_path(self):
