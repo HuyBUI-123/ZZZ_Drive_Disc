@@ -25,10 +25,25 @@ from ocr import extract_from_image, capture_detail
 pyautogui.FAILSAFE = True
 
 
+def _primary_monitor(sct) -> dict:
+    """
+    The Windows primary monitor — its top-left is always at virtual (0,0).
+    We find it by coordinates rather than by mss's monitor INDEX, because the
+    index order changes when display ports/cables are swapped. The region
+    configs and pyautogui clicks are all calibrated relative to this (0,0)
+    origin, so the game must stay on the primary screen.
+    """
+    for mon in sct.monitors[1:]:
+        if mon["left"] == 0 and mon["top"] == 0:
+            return mon
+    # Fallback: first real monitor, or the virtual bounding box.
+    return sct.monitors[1] if len(sct.monitors) > 1 else sct.monitors[0]
+
+
 def capture_full_screen() -> Image.Image:
-    """Grab the entire primary monitor."""
+    """Grab the entire primary monitor (the one at virtual origin)."""
     with mss.mss() as sct:
-        mon = sct.monitors[1]
+        mon = _primary_monitor(sct)
         shot = sct.grab(mon)
         return Image.frombytes("RGB", shot.size, shot.bgra, "raw", "BGRX")
 
