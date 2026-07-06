@@ -1,13 +1,12 @@
 """
 Draws an OCR crop region on a screenshot so you can verify alignment.
 
-Pick the region with --rc (Routine Cleanup popup), --ms (Music Store panel),
-or --grid (Routine Cleanup detection search area). Defaults to --rc.
+Pick the region with --rc (Routine Cleanup popup) or --ms (Music Store panel).
+Defaults to --rc. (For the Routine Cleanup disc grid use visualize_detection.py.)
 
 Usage:
   python visualize_region.py sample_images/detail_popup_1.png --rc
   python visualize_region.py sample_images/MusicStore_1.png --ms --out check.png
-  python visualize_region.py sample_images/routine_cleanup_obtain_1.png --grid
 """
 import sys
 from PIL import Image, ImageDraw
@@ -18,8 +17,6 @@ import config
 def _pick_region(args):
     if "--ms" in args:
         return config.MS_PANEL_REGION, "MS_PANEL_REGION"
-    if "--grid" in args:
-        return config.RC_GRID_REGION, "RC_GRID_REGION"
     return config.RC_POPUP_REGION, "RC_POPUP_REGION"
 
 

@@ -1,25 +1,24 @@
 """
-Draws detected S-rarity discs on a Routine Cleanup screenshot so you can
-verify detection before wiring up clicking.
+Draws the fixed Routine Cleanup disc grid + each disc's bar-sample patch on a
+screenshot, marking which slots are detected as S-rarity (gold bar). Use it to
+tune the grid coords (config._RC_COLS_X / _RC_ROWS_Y) and the S bar colour
+(config.RC_S_BAR_COLOR / RC_S_BAR_TOLERANCE / RC_S_BAR_MIN_FRACTION).
 
 Usage:
   python visualize_detection.py sample_images/routine_cleanup_obtain_1.png
   python visualize_detection.py sample_images/routine_cleanup_obtain_1.png --out check.png
-  python visualize_detection.py sample_images/routine_cleanup_obtain_1.png --mask   # also save the HSV mask
 """
 import sys
-import cv2
-import numpy as np
 from PIL import Image, ImageDraw
 
 import config
-from detector import detect_s_discs, debug_candidates, _crop_to_region
+from detector import debug_grid
 
 
 def main():
     args = sys.argv[1:]
     if not args:
-        print("Usage: python visualize_detection.py <screenshot.png> [--out output.png] [--mask]")
+        print("Usage: python visualize_detection.py <screenshot.png> [--out output.png]")
         sys.exit(1)
 
     image_path = args[0]
@@ -28,52 +27,30 @@ def main():
         out_path = args[args.index("--out") + 1]
 
     img = Image.open(image_path).convert("RGB")
-    discs = detect_s_discs(img)
-
+    info = debug_grid(img)
     draw = ImageDraw.Draw(img)
 
-    # Draw the search region in blue
-    if config.RC_GRID_REGION:
-        r = config.RC_GRID_REGION
-        draw.rectangle(
-            [r["left"], r["top"], r["left"] + r["width"], r["top"] + r["height"]],
-            outline=(0, 120, 255), width=2,
-        )
-
-    # Draw each detected gold bar in green + index + click point in red
-    for i, t in enumerate(discs, 1):
-        x, y, w, h = t["box"]
-        draw.rectangle([x, y, x + w, y + h], outline=(0, 255, 0), width=3)
-        draw.ellipse([t["x"] - 6, t["y"] - 6, t["x"] + 6, t["y"] + 6], fill=(255, 0, 0))
-        draw.text((x + 4, y - 16), str(i), fill=(255, 255, 0))
-
-    if "--debug" in args:
-        print("ALL gold blobs found in the region (before/with filtering):")
-        cands = debug_candidates(img)
-        if not cands:
-            print("  (none — HSV matched nothing in the region; check mask/region)")
-        for c in cands:
-            status = "KEEP" if c["passed"] else "drop(" + ",".join(c["rejected_by"]) + ")"
-            print(f"  box={c['box']}  w={c['w']} h={c['h']} aspect={c['aspect']}  -> {status}")
-        print()
+    hw = config.RC_BAR_SAMPLE_W // 2
+    hh = config.RC_BAR_SAMPLE_H // 2
+    for d in info:
+        cx, cy = d["click"]
+        bx, by = d["bar_point"]
+        color = (0, 255, 0) if d["is_s"] else (255, 60, 60)
+        # disc click point
+        draw.ellipse([cx - 6, cy - 6, cx + 6, cy + 6], fill=color)
+        # bar sample patch
+        draw.rectangle([bx - hw, by - hh, bx + hw, by + hh], outline=color, width=2)
+        draw.text((cx + 8, cy - 18), str(d["index"] + 1), fill=color)
 
     img.save(out_path)
-    print(f"Detected {len(discs)} S-rarity disc(s).")
-    for i, t in enumerate(discs, 1):
-        print(f"  #{i}: click at ({t['x']}, {t['y']})  bar box={t['box']}")
-    print(f"\nSaved → {out_path}")
-    print("Blue = search region, Green = detected gold bar, Red dot = click point.")
-
-    # Optionally dump the raw HSV mask for tuning the color range
-    if "--mask" in args:
-        arr = cv2.cvtColor(np.array(Image.open(image_path).convert("RGB")), cv2.COLOR_RGB2BGR)
-        region = _crop_to_region(arr)
-        hsv = cv2.cvtColor(region, cv2.COLOR_BGR2HSV)
-        mask = cv2.inRange(
-            hsv, np.array(config.RC_BAR_HSV_LOWER), np.array(config.RC_BAR_HSV_UPPER)
-        )
-        cv2.imwrite("detection_mask.png", mask)
-        print("Saved HSV mask → detection_mask.png (white = matched color)")
+    s_count = sum(1 for d in info if d["is_s"])
+    print(f"Detected {s_count} S-rarity disc(s) of {len(info)} grid slots.")
+    for d in info:
+        tag = "S" if d["is_s"] else "-"
+        print(f"  [{tag}] #{d['index'] + 1} click={d['click']} bar={d['bar_point']} "
+              f"match={d['match_fraction']} mean_rgb={d['mean_rgb']}")
+    print(f"\nSaved -> {out_path}")
+    print("Green = detected S (will click), Red = skipped. Box = bar sample area.")
 
 
 if __name__ == "__main__":

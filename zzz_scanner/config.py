@@ -90,22 +90,12 @@ def get_situation(source: str) -> str:
 # ===========================================================================
 # Situation 1: ROUTINE CLEANUP
 # ===========================================================================
-# Challenge Results screen. A grid of reward discs sits on the right. Only the
-# S-rarity discs (gold bar under the thumbnail) are scanned; A-rarity (purple
-# bar) are ignored. Clicking a disc opens a centered detail popup, which we
-# OCR, then dismiss before clicking the next.
-#
-# NOTE: all pixel values are first-pass estimates from the 2560x1440 reference
-# screenshots and should be fine-tuned with a live run (find_coords.py /
-# visualize_region.py).
-
-# Where to look for the disc grid (and their gold rarity bars).
-RC_GRID_REGION = {
-    "left": 1742,
-    "top": 655,
-    "width": 703,
-    "height": 420,
-}
+# Challenge Results screen. The 8 reward discs sit in a FIXED 2x4 grid (like
+# Music Store) and mix S and A rarity. For each grid slot we sample the small
+# rarity-bar area just below the disc: if it matches the exact gold S-rarity
+# colour, that disc is S and gets clicked; otherwise it's skipped. Clicking a
+# disc opens a centered detail popup, which we OCR, then dismiss before the
+# next click.
 
 # The detail popup's text area (title + main stat + sub-stats), to OCR.
 RC_POPUP_REGION = {
@@ -118,24 +108,24 @@ RC_POPUP_REGION = {
 # A safe empty spot to click to dismiss the open detail popup.
 RC_DISMISS_POINT = (2300, 720)
 
-# Each S disc is found by its gold rarity bar; click this far ABOVE the bar's
-# center to land on the disc thumbnail itself.
-RC_CARD_CLICK_Y_OFFSET = -65
+# Fixed 2x4 grid of the 8 shown disc centers (click points), in reading order.
+_RC_COLS_X = [1846, 2012, 2179, 2345]
+_RC_ROWS_Y = [745, 957]
+RC_GRID_POINTS = [(x, y) for y in _RC_ROWS_Y for x in _RC_COLS_X]
 
-# HSV range (OpenCV: H 0-179) for the S-rarity bar. The bar is a flat pure
-# gold — RGB (255,181,0) == HSV (21,255,255) — so we keep a tight band around
-# it. This isolates the bar from the duller gold of disc artwork, which would
-# otherwise merge into one oversized blob.
-RC_BAR_HSV_LOWER = (17, 180, 180)
-RC_BAR_HSV_UPPER = (25, 255, 255)
+# The rarity bar sits this far BELOW each disc center. We sample a small patch
+# there (wide + thin, like the bar) and call the disc S-rarity if enough of the
+# patch matches the gold bar colour below.
+RC_BAR_CHECK_OFFSET = 58   # px below the click point to the bar's center
+RC_BAR_SAMPLE_W = 40       # patch width  (bar is wide)
+RC_BAR_SAMPLE_H = 10       # patch height (bar is thin)
 
-# Size filtering for the detected gold bars (px at 2560x1440).
-RC_BAR_MIN_WIDTH = 80    # real bars ~125px; A-rank artwork blobs ~61px
-RC_BAR_MAX_WIDTH = 300
-RC_BAR_MIN_HEIGHT = 6
-RC_BAR_MAX_HEIGHT = 90
-RC_BAR_MIN_ASPECT = 1.6  # bar w/h is high; square artwork blobs ~1.1
-RC_ROW_TOLERANCE = 60    # px: bars within this Y range count as the same row
+# The exact S-rarity bar colour (RGB). Re-pick it with pick_color.py if it ever
+# drifts. A disc counts as S when at least RC_S_BAR_MIN_FRACTION of the sampled
+# patch is within RC_S_BAR_TOLERANCE (per RGB channel) of this colour.
+RC_S_BAR_COLOR = (255, 181, 0)   # pure gold
+RC_S_BAR_TOLERANCE = 45          # max per-channel difference to still count
+RC_S_BAR_MIN_FRACTION = 0.25     # >= this fraction of the patch must match
 
 
 # ===========================================================================

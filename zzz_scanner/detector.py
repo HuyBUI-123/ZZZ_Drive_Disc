@@ -1,142 +1,71 @@
 """
-Detects S-rarity drive discs on the Routine Cleanup (Challenge Results) screen.
+Detects S-rarity discs on the Routine Cleanup (Challenge Results) screen.
 
-ZZZ marks rarity with a colored bar under each disc thumbnail: gold = S,
-purple = A. We find the gold bars (by color) inside the reward grid region,
-filter to the wide/short bar shape, and return a click point on the disc
-*above* each bar — in reading order (left-to-right, top-to-bottom).
+The 8 reward discs sit in a FIXED 2x4 grid (like Music Store) and mix S and A
+rarity. Rather than colour-detecting bars anywhere on screen (which also picks
+up gold disc artwork and the yellow set-name text), we check each fixed grid
+slot: sample the small bar area just below the disc and, if enough of it
+matches the exact gold S-rarity colour, it's an S disc worth clicking.
 
-Restricting the search to RC_GRID_REGION keeps us away from the big orange "S"
-rank graphic and other gold UI elsewhere on the screen.
-
-(Music Store uses a fixed grid — see config.MS_GRID_POINTS — so it needs no
-detection.)
+(Music Store uses a fixed grid too — see config.MS_GRID_POINTS — but all 10 of
+its discs are S, so it needs no rarity check.)
 """
-import cv2
 import numpy as np
 from PIL import Image
 
 import config
 
 
-def _search_offset() -> tuple[int, int]:
-    """Top-left offset of the search region, for converting back to screen coords."""
-    if config.RC_GRID_REGION:
-        return config.RC_GRID_REGION["left"], config.RC_GRID_REGION["top"]
-    return 0, 0
+def _bar_patch(arr: np.ndarray, cx: int, cy: int):
+    """Return (patch_pixels, bar_center_y) for the bar area below a disc."""
+    by = cy + config.RC_BAR_CHECK_OFFSET
+    hw = config.RC_BAR_SAMPLE_W // 2
+    hh = config.RC_BAR_SAMPLE_H // 2
+    h, w, _ = arr.shape
+    y0, y1 = max(0, by - hh), min(h, by + hh + 1)
+    x0, x1 = max(0, cx - hw), min(w, cx + hw + 1)
+    if y0 >= y1 or x0 >= x1:
+        return np.empty((0, 3), dtype=int), by
+    return arr[y0:y1, x0:x1].reshape(-1, 3).astype(int), by
 
 
-def _crop_to_region(arr: np.ndarray) -> np.ndarray:
-    if config.RC_GRID_REGION:
-        r = config.RC_GRID_REGION
-        return arr[r["top"]: r["top"] + r["height"], r["left"]: r["left"] + r["width"]]
-    return arr
+def _bar_match_fraction(patch: np.ndarray) -> float:
+    """Fraction of patch pixels within tolerance of the S-rarity gold colour."""
+    if patch.size == 0:
+        return 0.0
+    target = np.array(config.RC_S_BAR_COLOR, dtype=int)
+    match = np.all(np.abs(patch - target) <= config.RC_S_BAR_TOLERANCE, axis=1)
+    return float(match.mean())
 
 
 def detect_s_discs(img: Image.Image) -> list[dict]:
     """
-    Find S-rarity disc click points in the given screenshot.
-
-    Returns a list of dicts in reading order:
-        { "x": click_x, "y": click_y, "box": (x, y, w, h) }   # box = the gold bar
-    Coordinates are absolute (screen-space, accounting for RC_GRID_REGION).
+    Check each fixed grid slot and return the S-rarity ones in reading order:
+        { "x": click_x, "y": click_y, "bar": (bar_x, bar_y) }
     """
     arr = np.array(img.convert("RGB"))
-    arr_bgr = cv2.cvtColor(arr, cv2.COLOR_RGB2BGR)
-
-    region = _crop_to_region(arr_bgr)
-    off_x, off_y = _search_offset()
-
-    hsv = cv2.cvtColor(region, cv2.COLOR_BGR2HSV)
-    mask = cv2.inRange(
-        hsv,
-        np.array(config.RC_BAR_HSV_LOWER),
-        np.array(config.RC_BAR_HSV_UPPER),
-    )
-
-    # Close horizontal gaps so each rarity bar is one solid blob.
-    kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (15, 3))
-    mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel, iterations=2)
-
-    contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-
-    found = []
-    for c in contours:
-        x, y, w, h = cv2.boundingRect(c)
-        if not (config.RC_BAR_MIN_WIDTH <= w <= config.RC_BAR_MAX_WIDTH):
-            continue
-        if not (config.RC_BAR_MIN_HEIGHT <= h <= config.RC_BAR_MAX_HEIGHT):
-            continue
-        # The rarity bar is a wide strip; reject squarish artwork blobs.
-        if w < h * config.RC_BAR_MIN_ASPECT:
-            continue
-        bar_cx = off_x + x + w // 2
-        bar_cy = off_y + y + h // 2
-        found.append({
-            "x": bar_cx,
-            "y": bar_cy + config.RC_CARD_CLICK_Y_OFFSET,  # click up onto the disc
-            "box": (off_x + x, off_y + y, w, h),
-        })
-
-    return _sort_reading_order(found)
+    results = []
+    for cx, cy in config.RC_GRID_POINTS:
+        patch, by = _bar_patch(arr, cx, cy)
+        if _bar_match_fraction(patch) >= config.RC_S_BAR_MIN_FRACTION:
+            results.append({"x": cx, "y": cy, "bar": (cx, by)})
+    return results
 
 
-def debug_candidates(img: Image.Image) -> list[dict]:
-    """
-    Return EVERY gold blob found in the region (before filtering), each with
-    its dimensions and whether it passed each filter. For tuning only.
-    """
+def debug_grid(img: Image.Image) -> list[dict]:
+    """Per-slot diagnostics for all 8 positions (S or not), for tuning."""
     arr = np.array(img.convert("RGB"))
-    arr_bgr = cv2.cvtColor(arr, cv2.COLOR_RGB2BGR)
-    region = _crop_to_region(arr_bgr)
-    off_x, off_y = _search_offset()
-
-    hsv = cv2.cvtColor(region, cv2.COLOR_BGR2HSV)
-    mask = cv2.inRange(
-        hsv, np.array(config.RC_BAR_HSV_LOWER), np.array(config.RC_BAR_HSV_UPPER)
-    )
-    kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (15, 3))
-    mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel, iterations=2)
-    contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-
     out = []
-    for c in contours:
-        x, y, w, h = cv2.boundingRect(c)
-        aspect = round(w / h, 2) if h else 0
-        reasons = []
-        if not (config.RC_BAR_MIN_WIDTH <= w <= config.RC_BAR_MAX_WIDTH):
-            reasons.append("width")
-        if not (config.RC_BAR_MIN_HEIGHT <= h <= config.RC_BAR_MAX_HEIGHT):
-            reasons.append("height")
-        if h and w < h * config.RC_BAR_MIN_ASPECT:
-            reasons.append("aspect")
+    for i, (cx, cy) in enumerate(config.RC_GRID_POINTS):
+        patch, by = _bar_patch(arr, cx, cy)
+        frac = _bar_match_fraction(patch)
+        mean = tuple(int(v) for v in patch.mean(axis=0)) if patch.size else (0, 0, 0)
         out.append({
-            "box": (off_x + x, off_y + y, w, h),
-            "w": w, "h": h, "aspect": aspect,
-            "passed": not reasons,
-            "rejected_by": reasons,
+            "index": i,
+            "click": (cx, cy),
+            "bar_point": (cx, by),
+            "match_fraction": round(frac, 3),
+            "mean_rgb": mean,
+            "is_s": frac >= config.RC_S_BAR_MIN_FRACTION,
         })
-    out.sort(key=lambda d: (d["box"][1], d["box"][0]))
     return out
-
-
-def _sort_reading_order(items: list[dict]) -> list[dict]:
-    """Sort top-to-bottom by row, then left-to-right within each row."""
-    if not items:
-        return []
-    tol = config.RC_ROW_TOLERANCE
-    items = sorted(items, key=lambda i: i["y"])
-    rows: list[list[dict]] = []
-    for it in items:
-        placed = False
-        for row in rows:
-            if abs(row[0]["y"] - it["y"]) <= tol:
-                row.append(it)
-                placed = True
-                break
-        if not placed:
-            rows.append([it])
-    ordered = []
-    for row in rows:
-        ordered.extend(sorted(row, key=lambda i: i["x"]))
-    return ordered
