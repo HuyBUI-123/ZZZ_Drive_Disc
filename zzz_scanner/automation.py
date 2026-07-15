@@ -18,7 +18,7 @@ import pyautogui
 from PIL import Image
 
 import config
-from detector import detect_s_discs
+from detector import detect_s_discs, detect_s_battery
 from ocr import extract_from_image, capture_detail
 
 # Move mouse to a screen corner to abort the whole run at any time.
@@ -107,16 +107,54 @@ def _scan_music_store(progress_cb=None) -> list[dict]:
     return results
 
 
-def scan_all(source: str, progress_cb=None) -> list[dict]:
+def _scroll_down(n: int) -> None:
+    """Hover over the reward list and scroll down n wheel units."""
+    x, y = config.RC_BATTERY_SCROLL_POINT
+    pyautogui.moveTo(x, y, duration=config.MOUSE_MOVE_DURATION)
+    for _ in range(n):
+        pyautogui.scroll(config.RC_BATTERY_SCROLL_AMOUNT)
+        time.sleep(config.DISMISS_WAIT)
+
+
+def _scan_battery(battery_count: int, progress_cb=None) -> list[dict]:
+    """
+    Follow the fixed scan plan for the given battery count. The Obtain dialog
+    must start scrolled to the top; each step scrolls down (cumulatively) then
+    scans its disc rows.
+    """
+    plan = config.RC_BATTERY_PLANS.get(battery_count)
+    if not plan:
+        return []
+
+    results: list[dict] = []
+    idx = 0
+    for scrolls, row_ys in plan:
+        if scrolls:
+            _scroll_down(scrolls)
+            time.sleep(config.CLICK_WAIT)
+        screen = capture_full_screen()
+        for d in detect_s_battery(screen, row_ys):
+            data = _read_one("battery", d["x"], d["y"], idx)
+            results.append(data)
+            idx += 1
+            if progress_cb:
+                progress_cb(idx, idx, data)
+    return results
+
+
+def scan_all(source: str, progress_cb=None, battery_count: int = 1) -> list[dict]:
     """
     Scan every disc for the given source.
 
     progress_cb(done, total, data) is called after each disc, if given.
+    battery_count is only used for the "Routine Cleanup - Battery" source.
     Returns a list of parsed-disc dicts (with debug fields).
     """
     situation = config.get_situation(source)
     if situation == "music_store":
         return _scan_music_store(progress_cb)
+    if situation == "battery":
+        return _scan_battery(battery_count, progress_cb)
     return _scan_routine_cleanup(progress_cb)
 
 

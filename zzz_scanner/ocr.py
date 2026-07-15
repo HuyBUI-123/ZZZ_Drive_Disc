@@ -87,6 +87,8 @@ def extract_from_image(img: Image.Image) -> tuple[dict, str]:
 def _region_for(situation: str) -> dict:
     if situation == "music_store":
         return config.MS_PANEL_REGION
+    if situation == "battery":
+        return config.BATTERY_PANEL_REGION
     return config.RC_POPUP_REGION
 
 

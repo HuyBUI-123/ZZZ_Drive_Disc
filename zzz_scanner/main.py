@@ -42,6 +42,7 @@ class ScannerApp(ctk.CTk):
         # Shared state — persisted across runs and shared by both screens
         self.path_var = ctk.StringVar(value=config.get_export_path())
         self.source = config.get_source()
+        self.battery_var = ctk.StringVar(value="1")  # only used by the Battery source
 
         self.container = ctk.CTkFrame(self)
         self.container.pack(fill="both", expand=True, padx=16, pady=16)
@@ -68,11 +69,22 @@ class ScannerApp(ctk.CTk):
         ctk.CTkLabel(src_row, text="Source:", font=("Segoe UI", 15, "bold")).pack(
             side="left", padx=(0, 10)
         )
-        self.source_selector = ctk.CTkSegmentedButton(
-            src_row, values=config.SOURCE_OPTIONS, command=self._set_source,
+        self.source_selector = ctk.CTkOptionMenu(
+            src_row, values=config.SOURCE_OPTIONS, width=260, command=self._set_source,
         )
         self.source_selector.set(self.source)
         self.source_selector.pack(side="left")
+
+        # Battery count (only used by the "Routine Cleanup - Battery" source)
+        bat_row = ctk.CTkFrame(self.container, fg_color="transparent")
+        bat_row.pack(pady=(4, 4))
+        ctk.CTkLabel(
+            bat_row, text="Batteries (Battery source only):", font=("Segoe UI", 13),
+        ).pack(side="left", padx=(0, 10))
+        self.battery_selector = ctk.CTkSegmentedButton(
+            bat_row, values=["1", "2", "3", "4"], variable=self.battery_var,
+        )
+        self.battery_selector.pack(side="left")
 
         # Save path
         path_row = ctk.CTkFrame(self.container, fg_color="transparent")
@@ -116,7 +128,7 @@ class ScannerApp(ctk.CTk):
 
     def _run_scan(self):
         try:
-            results = scan_all(self.source)
+            results = scan_all(self.source, battery_count=int(self.battery_var.get()))
         except Exception as e:  # noqa: BLE001 — surface any failure to the UI
             self.after(0, lambda: self._scan_failed(str(e)))
             return
@@ -283,7 +295,7 @@ class ScannerApp(ctk.CTk):
                 "numberOfSubstats": r.get("numberOfSubstats"),
                 "substats": r.get("substats") or [],
                 "score": self.scores.get(i, "Unknown"),
-                "source": self.source,  # chosen on the start page
+                "source": config.get_export_source(self.source),  # canonical name
             })
         return out
 

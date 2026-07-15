@@ -72,19 +72,35 @@ SCREEN_HEIGHT = 1440
 # Source options the user picks on the start page (must match the web app
 # constants.ts). "Music Store" and "Music Store - Selected" return the same
 # in-game UI, so they share a scanning situation.
-SOURCE_OPTIONS = ["Routine Cleanup", "Music Store", "Music Store - Selected"]
+SOURCE_OPTIONS = [
+    "Routine Cleanup",
+    "Routine Cleanup - Battery",
+    "Music Store",
+    "Music Store - Selected",
+]
 SOURCE = "Routine Cleanup"  # default
 
 # Which UI layout each source maps to.
 SITUATION_BY_SOURCE = {
     "Routine Cleanup": "routine_cleanup",
+    "Routine Cleanup - Battery": "battery",
     "Music Store": "music_store",
     "Music Store - Selected": "music_store",
+}
+
+# Some UI sources are written to the export under a canonical name.
+EXPORT_SOURCE = {
+    "Routine Cleanup - Battery": "Routine Cleanup",
 }
 
 
 def get_situation(source: str) -> str:
     return SITUATION_BY_SOURCE.get(source, "routine_cleanup")
+
+
+def get_export_source(source: str) -> str:
+    """The source string written to the JSON export."""
+    return EXPORT_SOURCE.get(source, source)
 
 
 # ===========================================================================
@@ -148,6 +164,65 @@ MS_PANEL_REGION = {
 _MS_COLS_X = [1408, 1631, 1853, 2076, 2299]
 _MS_ROWS_Y = [567, 851]
 MS_GRID_POINTS = [(x, y) for y in _MS_ROWS_Y for x in _MS_COLS_X]
+
+
+# ===========================================================================
+# Situation 3: ROUTINE CLEANUP - BATTERY  (the "Obtain" screen)
+# ===========================================================================
+# Battery farming opens the "Obtain" dialog: a 6-column grid of rewards (EXP,
+# drive discs, materials) with a persistent DETAIL panel on the right. Only the
+# gold-bar S discs matter. The layout is fixed per battery count, so we define
+# a scan PLAN per count: a list of scroll STEPS, each listing the disc-row Y
+# centers to check at that scroll position. At every listed (column, row) we
+# check the bar below for the gold colour (reusing RC_S_BAR_*); matches get
+# clicked and the DETAIL panel OCR'd. Steps after the first are reached by
+# scrolling down RC_BATTERY_SCROLL_AMOUNT.
+#
+# NOTE: the coords below are first-pass estimates — tune them against the
+# RoutineCleanupBattery_* and RoutineCleanup_*Batteries_*_scroll.png samples
+# with visualize_battery.py.
+
+# The right DETAIL panel (title + main stat + sub-stats), to OCR.
+BATTERY_PANEL_REGION = {
+    "left": 1460,
+    "top": 470,
+    "width": 560,
+    "height": 560,
+}
+
+# The 6 column centers of the reward grid (x, px at 2560x1440).
+BATTERY_COLS_X = [602, 749, 896, 1043, 1190, 1337]
+
+# Bar-check geometry for the (smaller) obtain-grid discs.
+RC_BATTERY_BAR_CHECK_OFFSET = 50   # px below a disc center to its rarity bar
+RC_BATTERY_BAR_SAMPLE_W = 34
+RC_BATTERY_BAR_SAMPLE_H = 10
+
+# Scrolling: hover here, then scroll this many wheel "clicks" per single scroll
+# unit (negative = down). Calibrate one unit against the reference screenshots.
+RC_BATTERY_SCROLL_POINT = (760, 640)
+RC_BATTERY_SCROLL_AMOUNT = -3
+
+# Scan PLAN per battery count. Each step is (scrolls_to_do_first, [row Y centers
+# to check]). Scrolls are cumulative down the list (0, then +2, then +2 = 4
+# total). Each step is tuned against the matching *_scroll.png screenshot so it
+# scans a section's disc rows exactly once — no re-scanning across steps.
+RC_BATTERY_PLANS = {
+    # 1 & 2 batteries: all S discs visible without scrolling.
+    1: [(0, [560])],
+    2: [(0, [560, 980])],
+    # 3 batteries: step 0 covers sections "1"+"2"; +2 scrolls covers "3".
+    3: [
+        (0, [560, 980]),   # -> RoutineCleanup_3Batteries_0_scroll.png
+        (2, [927]),         # -> RoutineCleanup_3Batteries_2_scroll.png
+    ],
+    # 4 batteries: +2 scrolls per further section ("3", then "4").
+    4: [
+        (0, [560, 980]),   # -> RoutineCleanup_4Batteries_0_scroll.png
+        (2, [927]),         # -> RoutineCleanup_4Batteries_2_scroll.png
+        (2, [870]),         # -> RoutineCleanup_4Batteries_4_scroll.png
+    ],
+}
 
 
 # ---------------------------------------------------------------------------

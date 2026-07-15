@@ -5,7 +5,8 @@ Open ZZZ to the relevant screen, run this, then switch to the game during the
 countdown. It clicks through each disc, OCRs the detail view, and dumps the
 results to scan_output.json.
 
-Pick the source/situation with --routine (default) or --music.
+Pick the source/situation with --routine (default), --music, or
+--battery N (N = battery count 1-4).
 
 SAFETY: slam the mouse into any screen corner to abort instantly
 (pyautogui failsafe).
@@ -13,6 +14,7 @@ SAFETY: slam the mouse into any screen corner to abort instantly
 Usage:
   python scan_test.py --routine
   python scan_test.py --music
+  python scan_test.py --battery 3
 """
 import sys
 import json
@@ -32,19 +34,27 @@ def on_progress(done, total, data):
 
 def main():
     args = sys.argv[1:]
+    battery_count = 1
     if "--music" in args:
         source = "Music Store"
+    elif "--battery" in args:
+        source = "Routine Cleanup - Battery"
+        i = args.index("--battery")
+        if i + 1 < len(args) and args[i + 1].isdigit():
+            battery_count = int(args[i + 1])
     elif "--routine" in args:
         source = "Routine Cleanup"
     else:
         source = config.get_source()
 
     print(f"Source: {source}  (situation: {config.get_situation(source)})")
+    if config.get_situation(source) == "battery":
+        print(f"Batteries: {battery_count}")
     print(f"Switch to ZZZ now — starting in {config.START_DELAY:.0f}s...")
     print("(Move mouse to a screen corner at any time to abort.)\n")
     time.sleep(config.START_DELAY)
 
-    results = scan_all(source, progress_cb=on_progress)
+    results = scan_all(source, progress_cb=on_progress, battery_count=battery_count)
 
     # Strip debug fields for the clean export
     clean = [{k: v for k, v in r.items() if not k.startswith("_")} for r in results]
