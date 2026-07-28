@@ -229,8 +229,8 @@ RC_BATTERY_PLANS = {
 # Timing / automation
 # ---------------------------------------------------------------------------
 MOUSE_MOVE_DURATION = 0.15   # seconds for the cursor to glide to a target
-CLICK_WAIT = 0.5             # wait after clicking a disc for details to render
-DISMISS_WAIT = 0.3           # wait after dismissing before the next click
+CLICK_WAIT = 0.2             # wait after clicking a disc for details to render
+DISMISS_WAIT = 0.2           # wait after dismissing before the next click
 START_DELAY = 3.0            # countdown after launch to switch to the game
 
 
@@ -299,4 +299,6 @@ ARTIFACT_SETS = [
     "Notes From the Chained",
     "Wuthering Salon",
     "The Sky Ablaze",
+    "Feathered Fate",
+    "Thorned Rose",
 ]

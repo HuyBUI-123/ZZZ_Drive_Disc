@@ -79,6 +79,8 @@ export const artifactConfig = {
       "Bunny in Wonderland",
       "Notes From the Chained",
       "Wuthering Salon",
-      "The Sky Ablaze"
+      "The Sky Ablaze",
+      "Feathered Fate",
+      "Thorned Rose"
     ],
 };
