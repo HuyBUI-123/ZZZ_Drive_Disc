@@ -13,16 +13,36 @@ branching on the situation (source) the user picked.
     (no popup to dismiss).
 """
 import time
+import threading
 import mss
 import pyautogui
+import keyboard
 from PIL import Image
 
 import config
 from detector import detect_s_discs, detect_s_battery
 from ocr import extract_from_image, capture_detail
 
-# Move mouse to a screen corner to abort the whole run at any time.
-pyautogui.FAILSAFE = True
+# Abort via a global key (config.ABORT_KEY) instead of the mouse-corner failsafe.
+pyautogui.FAILSAFE = False
+
+# Set when the user presses the abort key during a scan.
+_abort_event = threading.Event()
+
+
+def _arm_abort() -> None:
+    _abort_event.clear()
+    try:
+        keyboard.add_hotkey(config.ABORT_KEY, _abort_event.set)
+    except Exception as e:  # noqa: BLE001 — keep scanning even if the bind fails
+        print(f"[scan] could not bind abort key '{config.ABORT_KEY}': {e}", flush=True)
+
+
+def _disarm_abort() -> None:
+    try:
+        keyboard.remove_hotkey(config.ABORT_KEY)
+    except (KeyError, ValueError):
+        pass
 
 
 def _primary_monitor(sct) -> dict:
@@ -87,6 +107,8 @@ def _scan_routine_cleanup(progress_cb=None) -> list[dict]:
     results: list[dict] = []
     total = len(discs)
     for i, d in enumerate(discs):
+        if _abort_event.is_set():
+            break
         data = _read_one("routine_cleanup", d["x"], d["y"], i)
         results.append(data)
         if progress_cb:
@@ -100,6 +122,8 @@ def _scan_music_store(progress_cb=None) -> list[dict]:
     results: list[dict] = []
     total = len(points)
     for i, (x, y) in enumerate(points):
+        if _abort_event.is_set():
+            break
         data = _read_one("music_store", x, y, i)
         results.append(data)
         if progress_cb:
@@ -129,11 +153,15 @@ def _scan_battery(battery_count: int, progress_cb=None) -> list[dict]:
     results: list[dict] = []
     idx = 0
     for scrolls, row_ys in plan:
+        if _abort_event.is_set():
+            break
         if scrolls:
             _scroll_down(scrolls)
             time.sleep(config.CLICK_WAIT)
         screen = capture_full_screen()
         for d in detect_s_battery(screen, row_ys):
+            if _abort_event.is_set():
+                break
             data = _read_one("battery", d["x"], d["y"], idx)
             results.append(data)
             idx += 1
@@ -151,11 +179,21 @@ def scan_all(source: str, progress_cb=None, battery_count: int = 1) -> list[dict
     Returns a list of parsed-disc dicts (with debug fields).
     """
     situation = config.get_situation(source)
-    if situation == "music_store":
-        return _scan_music_store(progress_cb)
-    if situation == "battery":
-        return _scan_battery(battery_count, progress_cb)
-    return _scan_routine_cleanup(progress_cb)
+    _arm_abort()
+    print(f"[scan] press '{config.ABORT_KEY}' to abort.", flush=True)
+    try:
+        if situation == "music_store":
+            results = _scan_music_store(progress_cb)
+        elif situation == "battery":
+            results = _scan_battery(battery_count, progress_cb)
+        else:
+            results = _scan_routine_cleanup(progress_cb)
+    finally:
+        _disarm_abort()
+
+    if _abort_event.is_set():
+        print(f"[scan] aborted by user after {len(results)} disc(s).", flush=True)
+    return results
 
 
 def scan_single_at(situation: str, x: int, y: int) -> tuple[dict, str]:

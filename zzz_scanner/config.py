@@ -233,6 +233,9 @@ CLICK_WAIT = 0.2             # wait after clicking a disc for details to render
 DISMISS_WAIT = 0.2           # wait after dismissing before the next click
 START_DELAY = 3.0            # countdown after launch to switch to the game
 
+# Press this key at any time during a scan to abort it (the window reappears).
+ABORT_KEY = "`"
+
 
 # ---------------------------------------------------------------------------
 # Web-app vocabulary (must match zzz-t3/src/lib/constants.ts)
