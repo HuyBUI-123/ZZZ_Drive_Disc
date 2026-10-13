@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { api } from "~/trpc/react";
 import { artifactConfig } from "~/lib/constants";
@@ -64,6 +64,22 @@ function validateEntry(raw: unknown, index: number): ValidatedEntry {
   };
 }
 
+// Only compares: set, type, mainStat, numberOfSubstats, substats, unactivatedSubstat.
+function fingerprintOf(arts: ParsedArtifact[]): string {
+  return arts
+    .map((a) =>
+      JSON.stringify([
+        a.set,
+        a.type,
+        a.mainStat,
+        a.numberOfSubstats,
+        a.substats,
+      ]),
+    )
+    .sort()
+    .join("\n");
+}
+
 export default function ArtifactUploadForm() {
   const router = useRouter();
   const [fileName, setFileName] = useState<string | null>(null);
@@ -75,6 +91,11 @@ export default function ArtifactUploadForm() {
     type: "success" | "error";
     message: string;
   } | null>(null);
+  const [lastUploadedFingerprint, setLastUploadedFingerprint] = useState<
+    string | null
+  >(null);
+  const [duplicateWarning, setDuplicateWarning] = useState(false);
+  const pendingFingerprintRef = useRef<string | null>(null);
 
   const createMany = api.artifact.createMany.useMutation({
     onSuccess: (res) => {
@@ -85,6 +106,8 @@ export default function ArtifactUploadForm() {
       setEntries([]);
       setFileName(null);
       setPastedText("");
+      setLastUploadedFingerprint(pendingFingerprintRef.current);
+      setDuplicateWarning(false);
       router.refresh();
     },
     onError: (error) => {
@@ -95,6 +118,7 @@ export default function ArtifactUploadForm() {
   const parseJsonText = (text: string, source: string) => {
     setNotification(null);
     setParseError(null);
+    setDuplicateWarning(false);
     setEntries([]);
     setFileName(source);
 
@@ -111,7 +135,18 @@ export default function ArtifactUploadForm() {
       return;
     }
 
-    setEntries(json.map((item, i) => validateEntry(item, i)));
+    const parsed = json.map((item, i) => validateEntry(item, i));
+    setEntries(parsed);
+
+    // Flag an accidental re-upload of the exact same batch as last time.
+    const validArts = parsed.filter((e) => e.data !== null).map((e) => e.data!);
+    if (
+      validArts.length > 0 &&
+      lastUploadedFingerprint !== null &&
+      fingerprintOf(validArts) === lastUploadedFingerprint
+    ) {
+      setDuplicateWarning(true);
+    }
   };
 
   const handleFile = async (file: File) => {
@@ -138,6 +173,7 @@ export default function ArtifactUploadForm() {
 
   const handleUpload = () => {
     if (valid.length === 0) return;
+    pendingFingerprintRef.current = fingerprintOf(valid.map((e) => e.data!));
     createMany.mutate({ artifacts: valid.map((e) => e.data!) });
   };
 
@@ -227,6 +263,24 @@ export default function ArtifactUploadForm() {
         </p>
       )}
 
+
+      {/* Duplicate-batch warning */}
+      {duplicateWarning && (
+        <div className="mb-4 flex items-center justify-between gap-4 rounded-md border border-amber-500/50 bg-amber-500/20 px-4 py-3 text-amber-200">
+          <span className="text-sm font-medium">
+            This looks identical to the batch you just uploaded. Uploading again
+            may create duplicates.
+          </span>
+          <button
+            type="button"
+            onClick={() => setDuplicateWarning(false)}
+            className="shrink-0 rounded-md border border-amber-400/50 px-3 py-1 text-xs font-semibold text-amber-100 transition-colors hover:bg-amber-500/30"
+          >
+            Upload anyway
+          </button>
+        </div>
+      )}
+
       {/* Summary */}
       {entries.length > 0 && (
         <>
@@ -287,16 +341,20 @@ export default function ArtifactUploadForm() {
           <button
             type="button"
             onClick={handleUpload}
-            disabled={valid.length === 0 || createMany.isPending}
+            disabled={
+              valid.length === 0 || createMany.isPending || duplicateWarning
+            }
             className={`w-full rounded-md py-3 font-bold text-white transition-all ${
-              valid.length === 0 || createMany.isPending
+              valid.length === 0 || createMany.isPending || duplicateWarning
                 ? "cursor-not-allowed bg-gray-600 opacity-50"
                 : "bg-purple-600 shadow-lg hover:bg-purple-700 hover:shadow-purple-500/25"
             }`}
           >
             {createMany.isPending
               ? "Uploading..."
-              : `Upload ${valid.length} drive disc(s)`}
+              : duplicateWarning
+                ? "Possible duplicate — use “Upload anyway” to continue"
+                : `Upload ${valid.length} artifact(s)`}
           </button>
         </>
       )}
