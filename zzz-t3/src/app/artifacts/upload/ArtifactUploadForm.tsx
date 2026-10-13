@@ -84,6 +84,7 @@ export default function ArtifactUploadForm() {
       });
       setEntries([]);
       setFileName(null);
+      setPastedText("");
       router.refresh();
     },
     onError: (error) => {
